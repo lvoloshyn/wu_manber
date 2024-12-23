@@ -1,6 +1,14 @@
+from dataclasses import dataclass
 from typing import Dict, Generic, List, Tuple, TypeVar, Union
 
 T = TypeVar("T", str, bytes, List, Tuple)
+
+
+@dataclass
+class Match(Generic[T]):
+    pattern: T
+    pattern_index: int
+    span: Tuple[int, int]
 
 
 class WuManberSearch(Generic[T]):
@@ -57,39 +65,30 @@ class WuManberSearch(Generic[T]):
         return shift
 
     @staticmethod
-    def get_longest_spans(
-        spans: List[Tuple[Union[T, int], int, int]]
-    ) -> List[Tuple[Union[T, int], int, int]]:
+    def get_longest_spans(matches: List[Match]) -> List[Match]:
         # we assume spans are sorted
-        span_to_pattern: Dict[Tuple[int, int], Union[T, int]] = {
-            (span[1], span[2]): span[0] for span in spans
-        }
+        span_to_match = {match.span: match for match in matches}
 
         non_overlapping_spans: List[Tuple[int, int]] = []
 
-        for labeled_span in spans:
-            span: Tuple[int, int] = labeled_span[1:]
+        for match in matches:
             if not non_overlapping_spans:
-                non_overlapping_spans.append(span)
+                non_overlapping_spans.append(match.span)
 
             else:
-                if span[0] >= non_overlapping_spans[-1][1]:
-                    non_overlapping_spans.append(span)
+                if match.span[0] >= non_overlapping_spans[-1][1]:
+                    non_overlapping_spans.append(match.span)
 
                 else:
                     non_overlapping_spans[-1] = (
                         non_overlapping_spans[-1][0],
-                        max(span[1], non_overlapping_spans[-1][1]),
+                        max(match.span[1], non_overlapping_spans[-1][1]),
                     )
 
-        return [
-            (span_to_pattern[span], span[0], span[1]) for span in non_overlapping_spans
-        ]
+        return [span_to_match[span] for span in non_overlapping_spans]
 
-    def search(
-        self, sequence: T, only_longest: bool = False, return_pattern_id: bool = False
-    ) -> List[Tuple[Union[T, int], int, int]]:
-        result: List[Tuple[Union[T, int], int, int]] = []
+    def search(self, sequence: T, only_longest: bool = False) -> List[Match]:
+        result: List[Match] = []
 
         ix = self.m - 1
         length = len(sequence)
@@ -121,17 +120,13 @@ class WuManberSearch(Generic[T]):
                         if the_same:
                             pattern_start = ix - self.m + 1
                             pattern_end = pattern_start + len(pattern)
-                            if return_pattern_id:
-                                result.append(
-                                    (
-                                        self.pattern_to_id[pattern],
-                                        pattern_start,
-                                        pattern_end,
-                                    )
+                            result.append(
+                                Match(
+                                    pattern=pattern,
+                                    pattern_index=self.pattern_to_id[pattern],
+                                    span=(pattern_start, pattern_end),
                                 )
-
-                            else:
-                                result.append((pattern, pattern_start, pattern_end))
+                            )
 
                 shift = 1
 
